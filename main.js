@@ -1088,7 +1088,17 @@
                 var fileSavedDeferred = Q.defer();
 
                 console.log("Creating SVG for layer " + changeContext.layer.id + " (" + component.name + ")");
-                _generator.saveLayerToSVGFile(changeContext.layer.id, component.scale || 1, component.file);
+//                _generator.saveLayerToSVGFile(changeContext.layer.id, component.scale || 1, component.file);
+                var svgPromise = _generator.getSVGData(changeContext.layer.id, component.scale || 1);
+                svgPromise.then(
+                    function (svgText) {
+                        console.log("Received SVG text:\n" + svgText);
+                    },
+                    function (err) {
+                        console.log("SVG bombed: " + err + "\n");
+                    }
+                );
+
 
                 // TODO: Make sure this is called when the file operation is actually done...
                 fileSavedDeferred.resolve();
