@@ -22,7 +22,6 @@
  */
 
 /*jshint unused: false */
-/*global: unescape */
 
 (function () {
     "use strict";
