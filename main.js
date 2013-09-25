@@ -22,6 +22,7 @@
  */
 
 /*jshint unused: false */
+/*global: unescape */
 
 (function () {
     "use strict";
@@ -1059,7 +1060,22 @@
                 .then(function (path) {
                     // Save the image in a temporary file
                     tmpPath = path;
-                    return _generator.savePixmap(pixmap, tmpPath, settings);
+                    if (settings.format === "svg") {
+                        var svgDeferred = Q.defer();
+                        // Note "pixmap" in this case is really the text SVG data.
+                        fs.writeFile(tmpPath, pixmap, function (err) {
+                            if (err) {
+                                svgDeferred.reject("Error writing svgFile " + tmpPath);
+                            }
+                            else {
+                                svgDeferred.resolve(tmpPath);
+                            }
+                        });
+                        return svgDeferred.promise;
+                    }
+                    else {
+                        return _generator.savePixmap(pixmap, tmpPath, settings);
+                    }
                 })
                 .then(function () {
                     // Create the target directory
@@ -1085,25 +1101,20 @@
         function createComponentImage(component, exactBounds) {
             // SVGs use a different code path from the pixel-based formats
             if (component.extension === "svg") {
-                var fileSavedDeferred = Q.defer();
 
                 console.log("Creating SVG for layer " + changeContext.layer.id + " (" + component.name + ")");
-//                _generator.saveLayerToSVGFile(changeContext.layer.id, component.scale || 1, component.file);
-                var svgPromise = _generator.getSVGData(changeContext.layer.id, component.scale || 1);
-                svgPromise.then(
-                    function (svgText) {
-                        console.log("Received SVG text:\n" + svgText);
+                var svgPromise = _generator.convertSVGFile(changeContext.layer.id, component.scale || 1);
+                return svgPromise.then(
+                    function (svgJSON) {
+                        console.log("Received SVG text:\n" + decodeURI(svgJSON.svgText));
+                        return createLayerImage(decodeURI(svgJSON.svgText),
+                                                component.file,
+                                                {format:  component.extension});
                     },
                     function (err) {
-                        console.log("SVG bombed: " + err + "\n");
+                        console.log("SVG creation bombed: " + err + "\n");
                     }
                 );
-
-
-                // TODO: Make sure this is called when the file operation is actually done...
-                fileSavedDeferred.resolve();
-                
-                return fileSavedDeferred.promise;
             }
 
             var targetWidth    = convertToPixels(component.width,  component.widthUnit),
