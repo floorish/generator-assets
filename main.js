@@ -1345,25 +1345,82 @@
                 console.error("Menu creation failed", MENU_ID);
             }
         );
-        _generator.onPhotoshopEvent("generatorMenuChanged", handleGeneratorMenuClicked);
+        // _generator.onPhotoshopEvent("generatorMenuChanged", handleGeneratorMenuClicked);
 
         // Plugins should do as little as possible synchronously in init(). That way, all plugins get a
         // chance to put "fast" operations (e.g. menu registration) into the photoshop communication
         // pipe before slower startup stuff gets put in the pipe. Photoshop processes requests one at
         // a time in FIFO order.
-        function initLater() {
-            _generator.onPhotoshopEvent("currentDocumentChanged", handleCurrentDocumentChanged);
+        // function initLater() {
+        //     _generator.onPhotoshopEvent("currentDocumentChanged", handleCurrentDocumentChanged);
 
-            initFallbackBaseDirectory();
-            initPhotoshopPath().then(function () {
-                _generator.onPhotoshopEvent("imageChanged", handleImageChanged);
+        //     initFallbackBaseDirectory();
+        //     initPhotoshopPath().then(function () {
+        //         _generator.onPhotoshopEvent("imageChanged", handleImageChanged);
 
-                requestEntireDocument();
-            }).done();
+        //         requestEntireDocument();
+        //     }).done();
+        // }
+        
+        // process.nextTick(initLater);
+        //_generator.on("trackerReady", nextGen);
+        
+        console.log("====================================================================");
+
+        var _activeDocumentId,
+            _documentTracking = {};
+
+        function updateMenu() {
+            var enabled = Boolean(_documentTracking[_activeDocumentId]);
+            console.log("Setting menu state to", enabled);
+            _generator.toggleMenu(MENU_ID, true, enabled);
+        }
+
+        function startTrackingDocument(id) {
+            if (_documentTracking[id]) { return; }
+            _documentTracking[id] = true;
+            console.log("!!! NOW TRACKING DOCUMENT " + id + " !!!");
+            updateMenu();
+        }
+
+        function stopTrackingDocument(id) {
+            if (!_documentTracking[id]) { return; }
+            _documentTracking[id] = false;
+            console.log("!!! NO LONGER TRACKING DOCUMENT " + id + " !!!");
+            updateMenu();
         }
         
-        process.nextTick(initLater);
+        _generator.on("documentActivated", function (id, previousId) {
+            console.log(">> Document activated:", id, "was:", previousId);
+            _activeDocumentId = id;
+            updateMenu();
+        });
 
+        _generator.on("documentDiscovered", function (id) {
+            console.log(">> Document discovered:", id);
+
+            _generator.getDocumentSettingsForPlugin(id, PLUGIN_ID).then(function (settings) {
+                //context.setDocumentSettings(settings);
+                console.log(">> SETTINGS", settings);
+                if (settings.enabled) {
+                    startTrackingDocument(id);
+                }
+            });
+        });
+
+        _generator.on("documentClosed", function (id) {
+            console.log(">> Document closed:", id);
+            stopTrackingDocument(id);
+        });
+
+        _generator.on("menuClicked", function (menu) {
+            console.log(">> Menu clicked:", menu);
+            if (menu.previousState.checked) {
+                stopTrackingDocument(menu.documentId);
+            } else {
+                startTrackingDocument(menu.documentId);
+            }
+        });
     }
 
     exports.init = init;
