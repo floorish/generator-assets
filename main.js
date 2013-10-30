@@ -745,14 +745,23 @@
                     while (layers.length) {
                         // Remove the first entry of layers and store it in layers
                         var layer = layers.shift();
+
+                        // skip hidden layers - we should also delete their images, but this is a quick late night hack - tk
+                        // (including children)
+                        if (layer.visible) {
+                            // continue
+                        }
+
                         // Keep track of the layers that were mentioned as changed
                         changedLayers[layer.id] = true;
 
                         // Process the layer change
-                        if (layer.layers
+                        if (layer.visible
+                            && layer.layers
                             && layer.layers.length
                             && layer.layers[0] // has children
                             && layer.layers[0].name == '#' // named '#'
+                            && layer.layers[0].visible // is visible (this isn't necessary, but CutAndSliceMe works like this)
                             && layer.layers[0].path // with vector mask
                             && layer.layers[0].path.bounds // that has bounds
                             ) {
