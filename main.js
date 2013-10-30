@@ -202,7 +202,7 @@
         };
         
         /* jshint maxlen: 160 */
-        var exp = /^((((\d+|\d*\.\d+)(?:([a-z]{2}) )?|\?) *x *((\d+|\d*\.\d+)(?:([a-z]{2}) *)?|\?) +)|((\d+)% *))?(.+\.([a-z0-9]*[a-z]))(\-?(\d+%?))?$/i;
+        var exp = /^((((\d+|\d*\.\d+)(?:([a-z]{2}) )?|\?) *x *((\d+|\d*\.\d+)(?:([a-z]{2}) *)?|\?) +)|((\d+)% *))?(.+(@|\.([a-z0-9]*[a-z])))(\-?(\d+%?))?$/i;
         
         /* jshint maxlen: 120 */
         
@@ -220,15 +220,27 @@
         // 9 - relative scaling match string
         // 10 - relative scaling match number
         // 11 - file name
-        // 12 - file extension
-        // 13 - quality match string
-        // 14 - quality number
+        // 12 - @ or file extension including '.'
+        // 13 - file extension
+        // 14 - quality match string
+        // 15 - quality number
 
         if (match) {
+            if (typeof match[14] !== "undefined") {
+                result.quality = match[15];
+            }
+
             result.file      = match[11];
-            result.extension = match[12].toLowerCase();
-            if (typeof match[13] !== "undefined") {
-                result.quality = match[14];
+
+            // cutAndSliceMe compatibility - layers that end with @:
+            if (match[12] == '@') {
+                // replace with .png, and set quality match string to 32 -> as if user called layer .png32
+                result.extension = 'png';
+                result.quality = '32';
+                // name was xxx@ -> xxx.png
+                result.file = result.file.replace(/@$/,'.' + result.extension);
+            } else {
+                result.extension = match[13].toLowerCase();
             }
             if (typeof match[9] !== "undefined") {
                 result.scale = parseInt(match[10], 10) / 100;
