@@ -53,7 +53,7 @@
         //
         // Note to Photoshop engineers: This zstring must be kept in sync with the zstring in
         // generate.jsx in the Photoshop repo.
-        MENU_LABEL = "$$$/JavaScripts/Generator/ImageAssets/Menu=Image Assets",
+        MENU_LABEL = "$$$/JavaScripts/Generator/ImageAssets/Menu=Image Assets (Geewa)",
         // Files that are ignored when trying to determine whether a directory is empty
         FILES_TO_IGNORE = [".ds_store", "desktop.ini"],
         DELAY_TO_WAIT_UNTIL_USER_DONE = 300,
@@ -735,8 +735,22 @@
                         var layer = layers.shift();
                         // Keep track of the layers that were mentioned as changed
                         changedLayers[layer.id] = true;
+
                         // Process the layer change
-                        pendingPromises.push(processLayerChange(document, layer));
+                        if (layer.layers
+                            && layer.layers.length
+                            && layer.layers[0] // has children
+                            && layer.layers[0].name == '#' // named '#'
+                            && layer.layers[0].path // with vector mask
+                            && layer.layers[0].path.bounds // that has bounds
+                            ) {
+                            // TK - add sizing bounds - size of mask of first child if it's named '#'
+                            var firstChildBounds = layer.layers[0].path.bounds;
+
+                            pendingPromises.push(processLayerChange(document, layer, firstChildBounds));
+                        } else {
+                            pendingPromises.push(processLayerChange(document, layer));
+                        }
                         // Add the children to the layers queue
                         if (layer.layers) {
                             layers.push.apply(layers, layer.layers);
@@ -874,7 +888,7 @@
         return resolvedPromise();
     }
 
-    function processLayerChange(document, layer) {
+    function processLayerChange(document, layer, overrideBounds) {
         console.log("Scheduling change to layer %s of %s", layer.id, document.id);
         var documentContext = _contextPerDocument[document.id],
             layerContext    = documentContext.layers[layer.id];
@@ -900,7 +914,8 @@
                 updateDelayTimeout:     null,
                 documentChanges:        [],
                 layerChanges:           [],
-                updateCompleteDeferred: Q.defer()
+                updateCompleteDeferred: Q.defer(),
+                overrideBounds:         overrideBounds
             };
         }
 
@@ -1080,7 +1095,7 @@
             return imageCreatedDeferred.promise;
         }
 
-        function createComponentImage(component, exactBounds) {
+        function createComponentImage(component, exactBounds, overrideBounds) {
             // SVGs use a different code path from the pixel-based formats
             if (component.extension === "svg") {
                 console.log("Creating SVG for layer " + layer.id + " (" + component.name + ")");
@@ -1123,7 +1138,7 @@
                     bottom: Math.max(exactBounds.bottom, maskBounds.bottom)
                 },
 
-                pixmapSettings = _generator.getPixmapParams(scaleSettings, staticBounds, visibleBounds, paddedBounds);
+                pixmapSettings = _generator.getPixmapParams(scaleSettings, staticBounds, visibleBounds, overrideBounds ? overrideBounds : paddedBounds);
 
             // Get the pixmap
             console.log("Requesting pixmap for layer %d (%s) in document %d with settings %j",
@@ -1194,6 +1209,11 @@
                 layerContext.type = layer.type;
             }
 
+            // transfer from change context to layer context
+            if (changeContext.overrideBounds) {
+                layerContext.overrideBounds = changeContext.overrideBounds;
+            }
+
             if (layer.removed) {
                 // If the layer was removed delete all generated files 
                 deleteLayerImages();
@@ -1250,6 +1270,7 @@
             // Get exact bounds
             _generator.getPixmap(document.id, layer.id, { boundsOnly: true }).then(
                 function (pixmapInfo) {
+                    // if we have bounds from sizing child, use them
                     var exactBounds = pixmapInfo.bounds;
                     if (exactBounds.right <= exactBounds.left || exactBounds.bottom <= exactBounds.top) {
                         // Prevent an error after deleting a layer's contents, resulting in a 0x0 pixmap
@@ -1259,7 +1280,7 @@
                     }
 
                     var componentPromises  = components.map(function (component) {
-                        return createComponentImage(component, exactBounds);
+                        return createComponentImage(component, exactBounds, layerContext.overrideBounds);
                     });
 
                     Q.allSettled(componentPromises).then(function (results) {
